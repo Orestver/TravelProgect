@@ -3,10 +3,16 @@ from PyQt5.QtWidgets import (
     QGridLayout, QLineEdit, QMessageBox
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import  QFont, QPixmap
-import sys
+from PyQt5.QtGui import  QFont, QPixmap, QIcon
+import sys,os
 
 
+def resorse_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path,relative_path)
 
 class MyApp(QWidget):
     def __init__(self):
@@ -18,12 +24,15 @@ class MyApp(QWidget):
     def init_window(self):
         self.setWindowTitle("EasyJourney")
         self.setGeometry(0, 0, 1920, 1200)
+        self.setWindowIcon(QIcon(resorse_path("assets/LOGO.jpg")))
         
 
     def init_UI(self):
         self.background_label = QLabel(self)
+        self.background_label.setPixmap(QPixmap(resorse_path("assets/TRAVEL_LOGO.jpg")))
         self.background_label.setScaledContents(True)
         self.background_label.resize(self.size())
+        
         self.content_widget = QWidget(self)
         self.content_layout = QGridLayout(self.content_widget)
         self.content_layout.setAlignment(Qt.AlignCenter | Qt.AlignTop)
