@@ -1,0 +1,7 @@
+pip install \
+  google-generativeai \
+  reportlab \
+  PyQt5 \
+  PyQtWebEngine \
+  mysql-connector-python \
+  requests
