@@ -2,53 +2,72 @@ import requests
 from urllib.parse import quote
 from config import WEATHER_API
 
-# Define a mapping for transliteration
-transliteration_map = {
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
-    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-    'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '',
-    'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
-    'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
-    'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
-    'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch', 'Ъ': '',
-    'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
-}
-
-def transliterate(text):
-    transliterated_text = []
-    for char in text:
-        transliterated_char = transliteration_map.get(char, char)
-        transliterated_text.append(transliterated_char)
-    return ''.join(transliterated_text)
-
 class WeatherForecast:
+    def init(self, parent=None, label=None):
+        self.parent = parent
+        self.label = label  
+
+    def transliterate_city_name(self, city_name):
+        translit_map = {
+            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'h', 'ґ': 'g',
+            'д': 'd', 'е': 'e', 'є': 'ie', 'ж': 'zh', 'з': 'z',
+            'и': 'y', 'і': 'i', 'ї': 'i', 'й': 'i', 'к': 'k',
+            'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p',
+            'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f',
+            'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+            'ь': '', 'ю': 'iu', 'я': 'ia', '’': '', "'": ''
+        }
+        return ''.join(translit_map.get(c, c) for c in city_name.lower())
+
     def get_weather(self, city):
         if not city:
+            if self.label:
+                self.label.setText("⚠️ Введіть назву міста.")
             return
+
         try:
-            city_encoded = quote(transliterate(city))
-            url = f"http://api.openweathermap.org/data/2.5/weather?q={city_encoded}&appid={WEATHER_API}&units=metric"
-            response = requests.get(url)
+            city_latin = self.transliterate_city_name(city)
+            city_encoded = quote(city_latin)
+            url = f"http://api.openweathermap.org/data/2.5/weather?q={city_encoded}&appid={WEATHER_API}&units=metric&lang=ua"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
             data = response.json()
 
+            if data.get("cod") != 200:
+                if self.label:
+                    self.label.setText(f"❌ Місто «{city}» не знайдено (код: {data.get('cod')})")
+                return
+
             temp = data["main"]["temp"]
-            description = data["weather"][0]["description"]
+            weather = data["weather"][0]["description"]
             humidity = data["main"]["humidity"]
+            wind_speed = data["wind"]["speed"]
 
             message = (
-                f"Weather in {city}:\n"
-                f"Temp: {temp}°C\n"
-                f"Desc: {description}\n"
-                f"Humidity: {humidity}%\n"
+                f"📍 Погода в {city}:\n"
+                f"🌡 Температура: {temp}°C\n"
+                f"☁️ Опис: {weather.capitalize()}\n"
+                f"💧 Вологість: {humidity}%\n"
+                f"💨 Вітер: {wind_speed} м/с"
             )
-            print(message)
 
+            if self.label:
+                self.label.setText(message)
+            else:
+                print(message)
+
+        except requests.exceptions.RequestException as e:
+            if self.label:
+                self.label.setText(f"❌ Проблема з'єднання: {str(e)}")
+            else:
+                print(f"❌ Проблема з'єднання: {str(e)}")
         except Exception as e:
-            print(f"Error: {e}")
+            if self.label:
+                self.label.setText(f"⚠️ Помилка: {str(e)}")
+            else:
+                print(f"⚠️ Помилка: {str(e)}")
 
-if __name__ == "__main__":
+if name == "main":
     city = input("Введіть місто: ")
     weather = WeatherForecast()
     weather.get_weather(city)
