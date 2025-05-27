@@ -4,4 +4,7 @@ pip install \
   PyQt5 \
   PyQtWebEngine \
   mysql-connector-python \
-  requests
+  requests \
+  pandas \
+  numpy \ 
+  
