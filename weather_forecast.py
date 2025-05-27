@@ -66,8 +66,3 @@ class WeatherForecast:
                 self.label.setText(f"⚠️ Помилка: {str(e)}")
             else:
                 print(f"⚠️ Помилка: {str(e)}")
-
-if name == "main":
-    city = input("Введіть місто: ")
-    weather = WeatherForecast()
-    weather.get_weather(city)
