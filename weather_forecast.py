@@ -3,7 +3,7 @@ from urllib.parse import quote
 from config import WEATHER_API
 
 class WeatherForecast:
-    def init(self, parent=None, label=None):
+    def __init__(self, parent=None, label=None):
         self.parent = parent
         self.label = label  
 
