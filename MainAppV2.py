@@ -1,17 +1,21 @@
-import sys,os,re
+import sys,os
 import mysql.connector
 from mysql.connector import Error
-
-
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QPushButton, QLabel,
-    QGridLayout, QLineEdit, QMessageBox, QVBoxLayout
+    QApplication, QWidget, QPushButton, QLabel, QVBoxLayout,
+    QGridLayout, QLineEdit, QMessageBox
 )
+from PyQt5.QtGui import QIcon, QFont, QPixmap
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject
-from PyQt5.QtGui import  QFont, QPixmap, QIcon
-import sys,os
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 
+
+from Weather_forecast_window import WeatherWindow
+from graph import CityNavigator, RouteWindow
 from config import HOST,USER,PASSWORD,DATABASE
+from travel_assistant import AssistantWindow
+import re
+import bcrypt
 
 
 def resorse_path(relative_path):
@@ -20,6 +24,9 @@ def resorse_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path,relative_path)
+
+
+
 
 
 class Database:
@@ -60,8 +67,11 @@ class Database:
             )
             print("✅ Підключено до бази")
             cursor = conn.cursor()
+            
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            
             cursor.execute("INSERT INTO users (username, email, password) VALUES (%s, %s, %s)",
-                           (username, email, password))
+                        (username, email, hashed_password))
             conn.commit()
             print("✅ Користувач зареєстрований успішно!")
         except mysql.connector.IntegrityError as e:
@@ -75,24 +85,35 @@ class Database:
                 cursor.close()
             if conn and conn.is_connected():
                 conn.close()
+
     def login_user(self, email, password):
         try:
-            conn = mysql.connector.connect(host=self.host, user=self.user, password=self.password, database=self.database)
+            conn = mysql.connector.connect(
+                host=self.host, user=self.user,
+                password=self.password, database=self.database
+            )
             cursor = conn.cursor()
-            cursor.execute("SELECT username FROM users WHERE email = %s AND password = %s", (email, password))
-            user = cursor.fetchone()
+            
+            
+            cursor.execute("SELECT username, password FROM users WHERE email = %s", (email,))
+            result = cursor.fetchone()
             cursor.close()
             conn.close()
-            if user:
-                print(f"👋 Вітаємо, {user[0]}! Вхід успішний.")
-                return True, user[0]
+
+            if result:
+                username, hashed_password = result
+                if bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8')):
+                    print(f"👋 Вітаємо, {username}! Вхід успішний.")
+                    return True, username
+                else:
+                    print("❌ Невірний пароль.")
             else:
-                print("❌ Невірний email або пароль.")
-                return False, "Невірний email або пароль"
+                print("❌ Користувача не знайдено.")
+
+            return False, "Невірний email або пароль"
         except Error as e:
             print("❌ Помилка:", e)
             return False, str(e)
-        
 
 
 class RegisterUser(QObject):
@@ -125,6 +146,8 @@ class LoginUser(QObject):
             self.finished.emit(success, message if success else "Невірний email або пароль спробуйте щераз")
         except Exception as e:
             self.finished.emit(False, str(e))
+
+
 
 class Register_window(QWidget):
     registration_successful = pyqtSignal()
@@ -258,6 +281,7 @@ class Register_window(QWidget):
         self.content_widget.resize(self.size())
         super().resizeEvent(event)
 
+
 class Login_window(QWidget):
     login_successful = pyqtSignal()
     def __init__(self, parent=None):
@@ -366,19 +390,20 @@ class Login_window(QWidget):
         self.content_widget.resize(self.size())
         super().resizeEvent(event)
 
+
 class MyApp(QWidget):
     def __init__(self):
         super().__init__()
+        self.builder = CityNavigator(resorse_path("assets/worldcities.xlsx"), parent=self)
+        self.is_autorized = False
         self.init_window()
         self.init_UI()
-        self.is_autorized = False
-        
+        self.show_route_on_map([])  
 
     def init_window(self):
         self.setWindowTitle("EasyJourney")
         self.setGeometry(0, 0, 1920, 1200)
         self.setWindowIcon(QIcon(resorse_path("assets/LOGO.jpg")))
-        
 
     def init_UI(self):
         self.background_label = QLabel(self)
@@ -399,12 +424,12 @@ class MyApp(QWidget):
 
         self.button1 = QPushButton("Дізнатися погоду")
         self.button1.setStyleSheet(self.btn_style())
-        
+        self.button1.clicked.connect(self.open_weather_window)
         self.button1.setEnabled(False)
 
         self.button_graph = QPushButton("Знайти маршрут")
         self.button_graph.setStyleSheet(self.btn_style())
-        
+        self.button_graph.clicked.connect(self.open_route_dialog)
         self.button_graph.setEnabled(False)
 
         self.result_label = QLabel("")
@@ -423,7 +448,7 @@ class MyApp(QWidget):
 
         self.plan_button = QPushButton("Скласти план відпочинку")
         self.plan_button.setStyleSheet(self.btn_style())
-        
+        self.plan_button.clicked.connect(self.open_assistant_window)
         self.plan_button.setEnabled(False)
 
         self.content_layout.addWidget(self.label, 0, 0, 1, 5)
@@ -436,24 +461,6 @@ class MyApp(QWidget):
 
         self.content_widget.resize(self.size())
 
-    def on_authenticated(self):
-        self.is_autorized = True
-        self.button_graph.setEnabled(self.is_autorized)
-        self.button1.setEnabled(self.is_autorized)
-        self.plan_button.setEnabled(self.is_autorized)
-
-
-    def open_register_window(self):
-        self.reg_db = Register_window()
-        self.reg_db.setAttribute(Qt.WA_DeleteOnClose)
-        self.reg_db.registration_successful.connect(self.on_authenticated)
-        self.reg_db.show()
-        
-    def open_login_window(self):
-        self.log_db = Login_window()
-        self.log_db.setAttribute(Qt.WA_DeleteOnClose)
-        self.log_db.login_successful.connect(self.on_authenticated)
-        self.log_db.show()
     def btn_style(self):
         return """
             QPushButton {
@@ -467,11 +474,125 @@ class MyApp(QWidget):
                 background-color: #a58b5e;
             }
         """
+    def on_authenticated(self):
+        self.is_autorized = True
+        self.button_graph.setEnabled(self.is_autorized)
+        self.button1.setEnabled(self.is_autorized)
+        self.plan_button.setEnabled(self.is_autorized)
+
+    def open_register_window(self):
+        self.reg_db = Register_window()
+        self.reg_db.setAttribute(Qt.WA_DeleteOnClose)
+        self.reg_db.registration_successful.connect(self.on_authenticated)
+        self.reg_db.show()
+        
+    def open_assistant_window(self):
+        self.assist = AssistantWindow()
+        self.assist.setAttribute(Qt.WA_DeleteOnClose)
+        self.assist.show()
+
+
+    def open_login_window(self):
+        self.log_db = Login_window()
+        self.log_db.setAttribute(Qt.WA_DeleteOnClose)
+        self.log_db.login_successful.connect(self.on_authenticated)
+        self.log_db.show()
+        
+
+    def open_route_dialog(self):
+        self.route_window = RouteWindow(self.builder, self)
+        self.route_window.show()
+
+    def open_weather_window(self):
+        self.weather_window = WeatherWindow(parent=self)
+        self.weather_window.setAttribute(Qt.WA_DeleteOnClose)
+        self.weather_window.show()
+
+
+    def show_route_on_map(self, path):
+        if hasattr(self, 'map_view'):
+            self.content_layout.removeWidget(self.map_view)
+            self.map_view.deleteLater()
+            del self.map_view
+
+        self.map_container = QWidget()
+        map_layout = QVBoxLayout(self.map_container)
+        map_layout.setContentsMargins(0, 0, 0, 0)
+
+        close_button = QPushButton("Закрити карту")
+        close_button.setStyleSheet("background-color: #a94442; color: white; font-size: 14px; padding: 8px; border-radius: 6px;")
+        close_button.clicked.connect(self.close_map)
+
+        self.map_view = QWebEngineView()
+        self.map_view.setMinimumHeight(300)
+
+        if not path:
+            # Центрування на Україну, коли маршрут не задано
+            js_points = "[[48.3794, 31.1656]]"
+            zoom_level = 6
+            markers_code = ""
+            polyline_code = ""
+        else:
+            city_coords = self.builder.builder.city_coords
+            js_points = ",\n".join([f"[{city_coords[city][0]}, {city_coords[city][1]}]" for city in path])
+            js_points = f"[{js_points}]"
+            zoom_level = 5
+            markers_code = "\n".join([f"L.marker(points[{i}]).addTo(map).bindPopup('Місто {i+1}');" for i in range(len(path))])
+            polyline_code = "var polyline = L.polyline(points, {color: 'cyan'}).addTo(map); map.fitBounds(polyline.getBounds());"
+
+        html_map = f"""<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8" />
+            <title>Маршрут</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                html, body {{ height: 100%; margin: 0; }}
+                #map {{ width: 100%; height: 100%; }}
+            </style>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+        </head>
+        <body>
+            <div id="map"></div>
+            <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+            <script>
+                var points = {js_points};
+                var map = L.map('map').setView(points[0], {zoom_level});
+                L.tileLayer('https://tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                    maxZoom: 18,
+                    attribution: '&copy; OpenStreetMap contributors'
+                }}).addTo(map);
+                {markers_code}
+                {polyline_code}
+            </script>
+        </body>
+        </html>"""
+
+        self.map_view.setHtml(html_map)
+        map_layout.addWidget(close_button)
+        map_layout.addWidget(self.map_view)
+        self.content_layout.addWidget(self.map_container, 2, 0, 1, 5)
+
+
+    def close_map(self):
+        if hasattr(self, 'map_container'):
+            self.content_layout.removeWidget(self.map_container)
+            self.map_container.deleteLater()
+            del self.map_container
+            if hasattr(self, 'map_view'):
+                del self.map_view
+
+    def resizeEvent(self, event):
+        self.background_label.resize(self.size())
+        self.content_widget.resize(self.size())
+        super().resizeEvent(event)
+
+
 def main():
     app = QApplication(sys.argv)
-    window = MyApp()
     db = Database(HOST, USER, PASSWORD, DATABASE)
     db.create_database()
+    window = MyApp()
     window.showMaximized() 
     window.show()
     sys.exit(app.exec_())
