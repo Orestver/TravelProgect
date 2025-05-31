@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QWidget, QLabel, QPushButton, QVBoxLayout, QLineEdit, QApplication
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
-from weather_forecast import Weatherforecast
+from weather_forecast import WeatherForecast
 import sys
 class WeatherWindow(QWidget):
 
@@ -67,7 +67,7 @@ class WeatherWindow(QWidget):
 
         self.content_widget.resize(self.size())
         # Підключення класу погоди
-        self.weather = Weatherforecast(parent=self, label=self.result_label)
+        self.weather = WeatherForecast(parent=self, label=self.result_label)
 
     def fetch_weather(self):
         city = self.city_input.text().strip().title()
