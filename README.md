@@ -1,5 +1,5 @@
-# EasyJournay
-EasyJournay is the app for those who like to travel around the world you can get all information about weather, distance of your travel and your own travel plans. 
+# EasyJourney
+EasyJourney is the app for those who like to travel around the world you can get all information about weather, distance of your travel and your own travel plans. 
 
 
 ## 📒Features
