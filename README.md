@@ -14,3 +14,4 @@ EasyJourney is the app for those who like to travel around the world you can get
 ```bash
 git clone https://github.com/Orestver/TravelProgect
 pip install -r requirements.txt
+py main.py
